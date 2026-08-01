@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NHL Elo Predictions</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ice:#eef4fa;
+    --rink-blue:#0b3d91;
+    --rink-blue-dark:#082a66;
+    --steel:#1c2530;
+    --steel-2:#242f3d;
+    --panel:#15202b;
+    --panel-2:#1b2836;
+    --border:#2c3b4d;
+    --puck:#0a0e14;
+    --red:#c8102e;
+    --gold:#ffb81c;
+    --text:#e9eef4;
+    --text-dim:#9db0c4;
+    --text-faint:#6b7d92;
+    --green:#2ecc71;
+    --font-display: 'Bebas Neue', 'Oswald', 'Arial Narrow', sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'SF Mono', 'Roboto Mono', ui-monospace, monospace;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #0f1922 0%, var(--puck) 55%),
+      var(--puck);
+    color:var(--text);
+    font-family:'Inter', var(--font-body);
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+  /* faint rink-line texture across the whole page */
+  body::before{
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0 39px, rgba(255,255,255,0.012) 39px 40px);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  header{
+    position:relative;
+    padding:28px 24px 22px;
+    border-bottom:3px solid var(--rink-blue);
+    background:linear-gradient(180deg, #0d1b2e 0%, var(--puck) 100%);
+    overflow:hidden;
+  }
+  header::after{
+    content:'';
+    position:absolute; left:50%; top:-40px;
+    width:340px; height:340px;
+    border:2px solid rgba(255,255,255,0.05);
+    border-radius:50%;
+    transform:translateX(-50%);
+  }
+  .header-inner{
+    max-width:1180px; margin:0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    position:relative; z-index:1; flex-wrap:wrap; gap:14px;
+  }
+  .brand{display:flex; align-items:center; gap:14px;}
+  .brand-mark{
+    width:46px; height:46px; border-radius:50%;
+    background:conic-gradient(from 180deg, var(--rink-blue), var(--red), var(--gold), var(--rink-blue));
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Oswald',sans-serif; font-weight:700; font-size:20px;
+    box-shadow:0 0 0 3px var(--puck), 0 0 0 4px var(--border);
+    flex-shrink:0;
+  }
+  .brand-mark span{color:#0a0e14; text-shadow:0 1px 0 rgba(255,255,255,0.3);}
+  .brand h1{
+    font-family:'Oswald', sans-serif; font-weight:700;
+    font-size:26px; letter-spacing:0.5px; text-transform:uppercase;
+    line-height:1.1;
+  }
+  .brand h1 em{font-style:normal; color:var(--gold);}
+  .brand .tag{color:var(--text-dim); font-size:12.5px; margin-top:2px; letter-spacing:0.3px;}
+  #last-updated{
+    font-family:var(--font-mono); font-size:11.5px; color:var(--text-faint);
+    text-align:right;
+  }
+  #last-updated .dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--green); margin-right:6px; box-shadow:0 0 6px var(--green);
+  }
+
+  nav{
+    max-width:1180px; margin:20px auto 0; padding:0 24px;
+    display:flex; gap:6px; flex-wrap:wrap; position:relative; z-index:1;
+  }
+  .tab-btn{
+    background:var(--panel); border:1px solid var(--border); color:var(--text-dim);
+    font-family:'Oswald',sans-serif; font-weight:600; font-size:13px; letter-spacing:0.6px;
+    text-transform:uppercase; padding:10px 18px; border-radius:8px 8px 0 0;
+    cursor:pointer; transition:all .15s ease;
+  }
+  .tab-btn:hover{color:var(--text); background:var(--panel-2);}
+  .tab-btn.active{
+    background:var(--rink-blue); border-color:var(--rink-blue); color:#fff;
+    box-shadow:0 -2px 12px rgba(11,61,145,0.5);
+  }
+
+  main{max-width:1180px; margin:0 auto; padding:22px 24px 0; position:relative; z-index:1;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block; animation:fadein .25s ease;}
+  @keyframes fadein{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  .section-title{
+    font-family:'Oswald',sans-serif; font-weight:600; font-size:20px;
+    text-transform:uppercase; letter-spacing:0.4px; margin-bottom:2px;
+  }
+  .section-subtitle{color:var(--text-faint); font-size:12.5px; margin-bottom:16px;}
+
+  /* ── Game cards ─────────────────────────────────────────── */
+  .games-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:14px; margin-bottom:30px;}
+  .game-card{
+    background:linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
+    border:1px solid var(--border); border-radius:12px; padding:16px;
+    position:relative; overflow:hidden;
+  }
+  .game-card::before{
+    content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:linear-gradient(180deg, var(--rink-blue), var(--red));
+  }
+  .game-time{
+    font-family:var(--font-mono); font-size:11px; color:var(--text-faint);
+    display:flex; justify-content:space-between; margin-bottom:12px;
+  }
+  .game-conf{color:var(--gold);}
+  .matchup-row{display:flex; align-items:center; justify-content:space-between; padding:6px 0;}
+  .matchup-team{display:flex; align-items:center; gap:10px; flex:1;}
+  .team-abbr{
+    font-family:'Oswald',sans-serif; font-weight:700; font-size:16px;
+    width:48px; text-align:center;
+  }
+  .team-meta{font-size:11px; color:var(--text-faint);}
+  .team-goalie{font-size:11px; color:var(--text-dim); font-style:italic;}
+  .win-pct{
+    font-family:var(--font-mono); font-weight:600; font-size:15px;
+    min-width:52px; text-align:right;
+  }
+  .win-pct.favored{color:var(--gold);}
+  .vs-divider{
+    text-align:center; font-family:var(--font-mono); font-size:10px;
+    color:var(--text-faint); letter-spacing:2px; margin:2px 0;
+  }
+  .pred-strip{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;
+    margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);
+    text-align:center;
+  }
+  .pred-box .label{font-size:9.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.5px;}
+  .pred-box .value{font-family:var(--font-mono); font-size:13.5px; font-weight:600; margin-top:3px;}
+  .conf-badge{
+    display:inline-block; margin-top:10px; padding:3px 10px; border-radius:20px;
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+  }
+  .conf-strong{background:rgba(46,204,113,0.15); color:var(--green);}
+  .conf-moderate{background:rgba(255,184,28,0.15); color:var(--gold);}
+  .conf-tossup{background:rgba(155,166,179,0.15); color:var(--text-dim);}
+  .p1-toggle{
+    margin-top:10px; font-size:11px; color:var(--rink-blue); cursor:pointer;
+    text-decoration:underline; text-underline-offset:2px; user-select:none;
+  }
+  .p1-panel{
+    display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);
+  }
+  .p1-panel.open{display:block;}
+  .p1-panel .pred-strip{margin-top:0; padding-top:0; border-top:none;}
+  .empty-note{color:var(--text-faint); font-size:13px; padding:20px 0;}
+
+  /* ── Rankings table ─────────────────────────────────────── */
+  .rank-table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px;}
+  table.rank-table{width:100%; border-collapse:collapse; font-size:13px; min-width:760px;}
+  table.rank-table th{
+    background:var(--panel-2); color:var(--text-dim); font-weight:600;
+    text-transform:uppercase; font-size:10.5px; letter-spacing:0.4px;
+    padding:10px 8px; text-align:right; border-bottom:1px solid var(--border);
+    position:sticky; top:0;
+  }
+  table.rank-table th:first-child, table.rank-table th:nth-child(2){text-align:left;}
+  table.rank-table td{padding:9px 8px; text-align:right; border-bottom:1px solid rgba(44,59,77,0.5); font-family:var(--font-mono);}
+  table.rank-table td:first-child{font-family:'Oswald',sans-serif; color:var(--text-faint); text-align:left;}
+  table.rank-table td:nth-child(2){text-align:left; font-family:'Inter',sans-serif; font-weight:600;}
+  table.rank-table tr:hover td{background:rgba(255,255,255,0.02);}
+  .conf-tag{
+    display:inline-block; padding:1px 7px; border-radius:4px; font-size:10px; font-weight:700;
+    margin-left:6px; letter-spacing:0.3px;
+  }
+  .conf-east{background:rgba(200,16,46,0.18); color:#ff6b7f;}
+  .conf-west{background:rgba(11,61,145,0.25); color:#6fa8ff;}
+
+  /* ── Team stats grid ────────────────────────────────────── */
+  .teamstats-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:12px;}
+  .ts-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px;
+  }
+  .ts-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;}
+  .ts-name{font-family:'Oswald',sans-serif; font-weight:600; font-size:15px;}
+  .ts-elo{font-family:var(--font-mono); font-size:12px; color:var(--gold);}
+  .ts-row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; text-align:center;}
+  .ts-block .label{font-size:9.5px; color:var(--text-faint); text-transform:uppercase;}
+  .ts-block .value{font-family:var(--font-mono); font-weight:600; font-size:14px; margin-top:2px;}
+
+  /* ── Predictor tab ──────────────────────────────────────── */
+  .predictor-box{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:22px; max-width:640px; margin-bottom:24px;
+  }
+  .predictor-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;}
+  .predictor-row label{display:block; font-size:11px; color:var(--text-faint); text-transform:uppercase; margin-bottom:6px; letter-spacing:0.4px;}
+  select, input[type=text]{
+    width:100%; background:var(--steel); border:1px solid var(--border); color:var(--text);
+    padding:10px 12px; border-radius:7px; font-size:14px; font-family:inherit;
+  }
+  select:focus, input:focus{outline:2px solid var(--rink-blue); outline-offset:1px;}
+  .predict-btn{
+    background:var(--rink-blue); color:#fff; border:none; padding:12px 24px; border-radius:8px;
+    font-family:'Oswald',sans-serif; font-weight:600; font-size:14px; text-transform:uppercase;
+    letter-spacing:0.5px; cursor:pointer; width:100%; margin-top:6px; transition:background .15s;
+  }
+  .predict-btn:hover{background:#0e4bb0;}
+  #predictor-result{margin-top:20px;}
+
+  #chart-wrap{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; max-width:1000px; margin-bottom:20px;}
+
+  footer{max-width:1180px; margin:40px auto 0; padding:20px 24px; color:var(--text-faint); font-size:11.5px; text-align:center;}
+
+  .error-msg{color:#ff6b7f; font-size:13px; padding:14px; background:rgba(200,16,46,0.08); border-radius:8px;}
+
+  @media (max-width:600px){
+    .header-inner{flex-direction:column; align-items:flex-start;}
+    #last-updated{text-align:left;}
+    .predictor-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-mark"><span>NHL</span></div>
+      <div>
+        <h1>NHL <em>ELO</em> Predictions</h1>
+        <div class="tag">Winner · Total Goals · 1st Period · Puck Line</div>
+      </div>
+    </div>
+    <div id="last-updated"><span class="dot"></span>Loading…</div>
+  </div>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="today">Today</button>
+  <button class="tab-btn" data-tab="tomorrow">Tomorrow</button>
+  <button class="tab-btn" data-tab="standings">Standings</button>
+  <button class="tab-btn" data-tab="rankings">Elo Rankings</button>
+  <button class="tab-btn" data-tab="teamstats">Team Stats</button>
+  <button class="tab-btn" data-tab="predictor">Matchup Predictor</button>
+</nav>
+
+<main>
+
+  <section class="tab-panel active" id="tab-today">
+    <div class="section-title">Today's Games</div>
+    <div class="section-subtitle" id="today-subtitle">Loading schedule…</div>
+    <div class="games-grid" id="today-games"><div class="empty-note">Loading…</div></div>
+  </section>
+
+  <section class="tab-panel" id="tab-tomorrow">
+    <div class="section-title">Tomorrow's Games</div>
+    <div class="section-subtitle" id="tomorrow-subtitle">Loading schedule…</div>
+    <div class="games-grid" id="tomorrow-games"><div class="empty-note">Loading…</div></div>
+  </section>
+
+  <section class="tab-panel" id="tab-standings">
+    <div class="section-title">Standings</div>
+    <div class="section-subtitle" id="standings-subtitle">Loading…</div>
+    <div class="rank-table-wrap"><table class="rank-table" id="standings-table"></table></div>
+  </section>
+
+  <section class="tab-panel" id="tab-rankings">
+    <div class="section-title">Elo Power Rankings</div>
+    <div class="section-subtitle" id="rankings-subtitle">Loading…</div>
+    <div id="chart-wrap"><canvas id="elo-chart" height="90"></canvas></div>
+    <div class="rank-table-wrap"><table class="rank-table" id="rankings-table"></table></div>
+  </section>
+
+  <section class="tab-panel" id="tab-teamstats">
+    <div class="section-title">Team Stats</div>
+    <div class="section-subtitle" id="teamstats-subtitle">Loading…</div>
+    <div class="teamstats-grid" id="teamstats-grid"></div>
+  </section>
+
+  <section class="tab-panel" id="tab-predictor">
+    <div class="section-title">Matchup Predictor</div>
+    <div class="section-subtitle">Pick any two teams (and optionally starting goalies) for an instant prediction</div>
+    <div class="predictor-box">
+      <div class="predictor-row">
+        <div>
+          <label>Away Team</label>
+          <select id="pred-away"></select>
+        </div>
+        <div>
+          <label>Home Team</label>
+          <select id="pred-home"></select>
+        </div>
+      </div>
+      <div class="predictor-row">
+        <div>
+          <label>Away Starting Goalie (optional)</label>
+          <select id="pred-away-goalie"><option value="">— League average —</option></select>
+        </div>
+        <div>
+          <label>Home Starting Goalie (optional)</label>
+          <select id="pred-home-goalie"><option value="">— League average —</option></select>
+        </div>
+      </div>
+      <button class="predict-btn" onclick="runPredictor()">Predict Matchup</button>
+      <div id="predictor-result"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  NHL Elo Prediction Model · Data refreshes from the linked Google Sheet · Not affiliated with the NHL
+</footer>
+
+<script>
+/* ======================================================================
+   CONFIG — paste your deployed Apps Script Web App URL here
+   ====================================================================== */
+const WEBAPP_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+let _rankingMap = {};
+let _ratingsData = [];
+let _goaliesData = [];
+let _teamsData = [];
+
+/* ── Tabs ─────────────────────────────────────────────────────────── */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function showError(containerId, msg){
+  const el = document.getElementById(containerId);
+  if (el) el.innerHTML = `<div class="error-msg">⚠ ${msg}</div>`;
+}
+
+/* ── JSONP fetch (Apps Script Web Apps don't set CORS headers) ──────── */
+function jsonpFetch(url){
+  return new Promise((resolve, reject) => {
+    const cbName = '_nhlcb_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('Request timed out')); }, 15000);
+    function cleanup(){
+      clearTimeout(timeout);
+      delete window[cbName];
+      script.remove();
+    }
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    script.onerror = () => { cleanup(); reject(new Error('Failed to load data — check the Web App URL and deployment access.')); };
+    document.body.appendChild(script);
+  });
+}
+
+/* ── Boot ─────────────────────────────────────────────────────────── */
+async function loadAll(){
+  if (!WEBAPP_URL || WEBAPP_URL.indexOf('PASTE_YOUR') === 0){
+    ['today-games','tomorrow-games'].forEach(id => showError(id, 'Set WEBAPP_URL at the top of the script to your deployed Apps Script Web App URL.'));
+    document.getElementById('last-updated').textContent = 'Not configured';
+    return;
+  }
+  try{
+    const data = await jsonpFetch(WEBAPP_URL);
+    const ts = new Date(data.generated);
+    document.getElementById('last-updated').innerHTML =
+      '<span class="dot"></span>Updated ' + ts.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+
+    _ratingsData = data.ratings || [];
+    _goaliesData = data.goalies || [];
+    _teamsData = data.teams || [];
+    buildRankingMap(_ratingsData);
+
+    const todayStr = new Date().toDateString();
+    const tomorrowStr = new Date(Date.now() + 86400000).toDateString();
+    const schedule = data.schedule || [];
+    const todayGames = schedule.filter(g => g.Date && new Date(g.Date).toDateString() === todayStr);
+    const tomorrowGames = schedule.filter(g => g.Date && new Date(g.Date).toDateString() === tomorrowStr);
+
+    renderDayGames(todayGames, 'today-games', 'today-subtitle', 'Today · ' + new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+    renderDayGames(tomorrowGames, 'tomorrow-games', 'tomorrow-subtitle', 'Tomorrow · ' + new Date(Date.now()+86400000).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+
+    document.getElementById('standings-subtitle').textContent =
+      'Updated through ' + ts.toLocaleDateString('en-US',{month:'long',day:'numeric'}) + ' results';
+    renderStandings(_ratingsData);
+
+    document.getElementById('rankings-subtitle').textContent =
+      'Updated through ' + ts.toLocaleDateString('en-US',{month:'long',day:'numeric'}) + ' results · Elo + 1st-Period Elo';
+    renderRankings(_ratingsData);
+    renderEloChart(_ratingsData);
+
+    document.getElementById('teamstats-subtitle').textContent =
+      _ratingsData.length + ' teams · GF/G, GA/G, records & form';
+    renderTeamStats(_ratingsData);
+
+    populatePredictor(_teamsData, _goaliesData);
+
+  } catch(err){
+    const msg = err.message || 'Unknown error';
+    ['today-games','tomorrow-games'].forEach(id => showError(id, msg));
+    showError('standings-table', msg);
+    showError('rankings-table', msg);
+    showError('teamstats-grid', msg);
+    document.getElementById('last-updated').textContent = 'Failed to load';
+  }
+}
+
+function buildRankingMap(ratings){
+  _rankingMap = {};
+  ratings.forEach(r => { _rankingMap[r.Abbr] = r; });
+}
+
+/* ── Game cards (Today / Tomorrow) ───────────────────────────────────── */
+function confClass(conf){
+  if (conf === 'Strong') return 'conf-strong';
+  if (conf === 'Moderate') return 'conf-moderate';
+  return 'conf-tossup';
+}
+
+function renderGameCard(g){
+  const away = g['Away Team'], home = g['Home Team'];
+  const awayR = _rankingMap[away] || {}, homeR = _rankingMap[home] || {};
+  const homeWinPct = Number(g['Home Win%']) || 0;
+  const awayWinPct = 1 - homeWinPct;
+  const homeFav = homeWinPct >= 0.5;
+  const p1HomeWinPct = Number(g['1P Home Win%']) || 0;
+  const p1AwayWinPct = 1 - p1HomeWinPct;
+  const p1HomeFav = p1HomeWinPct >= 0.5;
+  const cardId = 'p1-' + away + '-' + home + '-' + Math.random().toString(36).slice(2,7);
+
+  return `
+  <div class="game-card">
+    <div class="game-time">
+      <span>${g['Tip Time'] || ''}</span>
+      <span class="game-conf">${awayR.Conf ? (awayR.Conf.slice(0,4).toUpperCase()) : ''}</span>
+    </div>
+    <div class="matchup-row">
+      <div class="matchup-team">
+        <span class="team-abbr">${away}</span>
+        <div>
+          <div class="team-meta">${awayR.W ?? ''}-${awayR.L ?? ''}${awayR.OTL ? '-'+awayR.OTL : ''} · Elo ${awayR.Elo ?? '—'}</div>
+          ${g['Away Goalie'] ? `<div class="team-goalie">🥅 ${g['Away Goalie']}</div>` : ''}
+        </div>
+      </div>
+      <span class="win-pct ${!homeFav ? 'favored' : ''}">${(awayWinPct*100).toFixed(0)}%</span>
+    </div>
+    <div class="vs-divider">@</div>
+    <div class="matchup-row">
+      <div class="matchup-team">
+        <span class="team-abbr">${home}</span>
+        <div>
+          <div class="team-meta">${homeR.W ?? ''}-${homeR.L ?? ''}${homeR.OTL ? '-'+homeR.OTL : ''} · Elo ${homeR.Elo ?? '—'}</div>
+          ${g['Home Goalie'] ? `<div class="team-goalie">🥅 ${g['Home Goalie']}</div>` : ''}
+        </div>
+      </div>
+      <span class="win-pct ${homeFav ? 'favored' : ''}">${(homeWinPct*100).toFixed(0)}%</span>
+    </div>
+
+    <div class="pred-strip">
+      <div class="pred-box"><div class="label">Proj Score</div><div class="value">${g['Proj Away Goals']}–${g['Proj Home Goals']}</div></div>
+      <div class="pred-box"><div class="label">Total (O/U)</div><div class="value">${g['Total (O/U)']}</div></div>
+      <div class="pred-box"><div class="label">Puck Line</div><div class="value">${home} ${g['Puck Line (Home)'] > 0 ? '+' : ''}${g['Puck Line (Home)']}</div></div>
+    </div>
+    <span class="conf-badge ${confClass(g['Confidence'])}">${g['Confidence'] || '—'} pick</span>
+
+    <div class="p1-toggle" onclick="document.getElementById('${cardId}').classList.toggle('open')">▾ 1st Period prediction</div>
+    <div class="p1-panel" id="${cardId}">
+      <div class="matchup-row" style="padding:2px 0;">
+        <span style="font-size:12px;color:var(--text-dim);">${away} 1P Win%</span>
+        <span class="win-pct ${!p1HomeFav ? 'favored' : ''}" style="font-size:13px;">${(p1AwayWinPct*100).toFixed(0)}%</span>
+      </div>
+      <div class="matchup-row" style="padding:2px 0;">
+        <span style="font-size:12px;color:var(--text-dim);">${home} 1P Win%</span>
+        <span class="win-pct ${p1HomeFav ? 'favored' : ''}" style="font-size:13px;">${(p1HomeWinPct*100).toFixed(0)}%</span>
+      </div>
+      <div class="pred-strip">
+        <div class="pred-box"><div class="label">1P Score</div><div class="value">${g['1P Proj Away']}–${g['1P Proj Home']}</div></div>
+        <div class="pred-box"><div class="label">1P Total</div><div class="value">${g['1P Total']}</div></div>
+        <div class="pred-box"><div class="label">1P Pick</div><div class="value" style="font-size:11px;">${g['1P Confidence'] || '—'}</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDayGames(games, containerId, subtitleId, label){
+  document.getElementById(subtitleId).textContent = label + (games.length ? ` · ${games.length} game${games.length!==1?'s':''}` : ' · No games scheduled');
+  const el = document.getElementById(containerId);
+  if (!games.length){
+    el.innerHTML = '<div class="empty-note">No games scheduled.</div>';
+    return;
+  }
+  el.innerHTML = games.map(renderGameCard).join('');
+}
+
+/* ── Standings ────────────────────────────────────────────────────────── */
+function renderStandings(ratings){
+  const sorted = [...ratings].sort((a,b) => (b.W - b.L*0) - 0 || (winPct(b) - winPct(a)));
+  const rows = sorted.map((t,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${t.Team} <span class="conf-tag ${t.Conf==='Eastern'?'conf-east':'conf-west'}">${(t.Conf||'').slice(0,4).toUpperCase()}</span></td>
+      <td>${t.Div || ''}</td>
+      <td>${t.GP}</td>
+      <td>${t.W}</td>
+      <td>${t.L}</td>
+      <td>${t.OTL}</td>
+      <td>${winPct(t).toFixed(3)}</td>
+      <td>${t['Home W']}-${t['Home L']}</td>
+      <td>${t['Away W']}-${t['Away L']}</td>
+      <td>${t['Form (L10)'] || ''}</td>
+      <td>${t.Streak || ''}</td>
+    </tr>`).join('');
+  document.getElementById('standings-table').innerHTML = `
+    <thead><tr>
+      <th>#</th><th>Team</th><th>Div</th><th>GP</th><th>W</th><th>L</th><th>OTL</th>
+      <th>Pt%</th><th>Home</th><th>Away</th><th>L10</th><th>Streak</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>`;
+}
+
+function winPct(t){
+  const gp = Number(t.GP) || 0;
+  if (!gp) return 0;
+  return (Number(t.W) + 0.5*Number(t.OTL)) / gp;
+}
+
+/* ── Elo Rankings ─────────────────────────────────────────────────────── */
+function renderRankings(ratings){
+  const sorted = [...ratings].sort((a,b) => b.Elo - a.Elo);
+  const rows = sorted.map((t,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${t.Team} <span class="conf-tag ${t.Conf==='Eastern'?'conf-east':'conf-west'}">${(t.Conf||'').slice(0,4).toUpperCase()}</span></td>
+      <td>${Number(t.Elo).toFixed(0)}</td>
+      <td>${Number(t['1P Elo']).toFixed(0)}</td>
+      <td>${t.GP}</td>
+      <td>${winPct(t).toFixed(3)}</td>
+      <td>${t['GF/G']}</td>
+      <td>${t['GA/G']}</td>
+      <td>${t['Form (L10)'] || ''}</td>
+      <td>${t.Streak || ''}</td>
+    </tr>`).join('');
+  document.getElementById('rankings-table').innerHTML = `
+    <thead><tr>
+      <th>#</th><th>Team</th><th>Elo</th><th>1P Elo</th><th>GP</th><th>Pt%</th>
+      <th>GF/G</th><th>GA/G</th><th>L10</th><th>Streak</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>`;
+}
+
+let _eloChartInstance = null;
+function renderEloChart(ratings){
+  const sorted = [...ratings].sort((a,b) => b.Elo - a.Elo);
+  const ctx = document.getElementById('elo-chart');
+  if (_eloChartInstance) _eloChartInstance.destroy();
+  _eloChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(t => t.Abbr),
+      datasets: [{
+        label: 'Elo Rating',
+        data: sorted.map(t => Number(t.Elo)),
+        backgroundColor: sorted.map(t => t.Conf === 'Eastern' ? '#c8102e' : '#0b3d91'),
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color:'#9db0c4', font:{size:10} }, grid:{ display:false } },
+        y: { beginAtZero:false, ticks:{ color:'#9db0c4' }, grid:{ color:'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+/* ── Team Stats ───────────────────────────────────────────────────────── */
+function renderTeamStats(ratings){
+  const sorted = [...ratings].sort((a,b) => b.Elo - a.Elo);
+  document.getElementById('teamstats-grid').innerHTML = sorted.map(t => `
+    <div class="ts-card">
+      <div class="ts-head">
+        <span class="ts-name">${t.Team}</span>
+        <span class="ts-elo">Elo ${Number(t.Elo).toFixed(0)}</span>
+      </div>
+      <div class="ts-row">
+        <div class="ts-block"><div class="label">GF/G</div><div class="value">${t['GF/G']}</div></div>
+        <div class="ts-block"><div class="label">GA/G</div><div class="value">${t['GA/G']}</div></div>
+        <div class="ts-block"><div class="label">Pt%</div><div class="value">${winPct(t).toFixed(3)}</div></div>
+      </div>
+      <div class="ts-row" style="margin-top:8px;">
+        <div class="ts-block"><div class="label">Home</div><div class="value">${t['Home W']}-${t['Home L']}</div></div>
+        <div class="ts-block"><div class="label">Away</div><div class="value">${t['Away W']}-${t['Away L']}</div></div>
+        <div class="ts-block"><div class="label">L10</div><div class="value">${t['Form (L10)']||''}</div></div>
+      </div>
+    </div>`).join('');
+}
+
+/* ── Matchup Predictor ────────────────────────────────────────────────── */
+function populatePredictor(teams, goalies){
+  const awaySel = document.getElementById('pred-away');
+  const homeSel = document.getElementById('pred-home');
+  const opts = teams.map(t => `<option value="${t.Abbr}">${t['Team Name'] || t.Abbr}</option>`).join('');
+  awaySel.innerHTML = opts;
+  homeSel.innerHTML = opts;
+  if (teams.length > 1){ awaySel.selectedIndex = 0; homeSel.selectedIndex = 1; }
+
+  function refreshGoalieOptions(){
+    const awayTeam = awaySel.value, homeTeam = homeSel.value;
+    const awayGoalieSel = document.getElementById('pred-away-goalie');
+    const homeGoalieSel = document.getElementById('pred-home-goalie');
+    const awayG = goalies.filter(g => g['Team Abbr'] === awayTeam);
+    const homeG = goalies.filter(g => g['Team Abbr'] === homeTeam);
+    awayGoalieSel.innerHTML = '<option value="">— League average —</option>' +
+      awayG.map(g => `<option value="${g['Goalie Name']}">${g['Goalie Name']} (${g['SV%']} SV%)</option>`).join('');
+    homeGoalieSel.innerHTML = '<option value="">— League average —</option>' +
+      homeG.map(g => `<option value="${g['Goalie Name']}">${g['Goalie Name']} (${g['SV%']} SV%)</option>`).join('');
+  }
+  awaySel.addEventListener('change', refreshGoalieOptions);
+  homeSel.addEventListener('change', refreshGoalieOptions);
+  refreshGoalieOptions();
+}
+
+function goalieEloDelta(svPct){
+  const LEAGUE_AVG = 0.905;
+  if (!svPct || isNaN(svPct)) return 0;
+  return (svPct - LEAGUE_AVG) * 3500;
+}
+
+function winProbClient(diff, scale){ return 1 / (1 + Math.pow(10, -diff/scale)); }
+
+function runPredictor(){
+  const awayAbbr = document.getElementById('pred-away').value;
+  const homeAbbr = document.getElementById('pred-home').value;
+  const awayGoalieName = document.getElementById('pred-away-goalie').value;
+  const homeGoalieName = document.getElementById('pred-home-goalie').value;
+
+  const awayR = _rankingMap[awayAbbr], homeR = _rankingMap[homeAbbr];
+  const resultEl = document.getElementById('predictor-result');
+  if (!awayR || !homeR){
+    resultEl.innerHTML = '<div class="error-msg">Data still loading — try again in a moment.</div>';
+    return;
+  }
+  if (awayAbbr === homeAbbr){
+    resultEl.innerHTML = '<div class="error-msg">Pick two different teams.</div>';
+    return;
+  }
+
+  const HOME_ICE_ADV = 50, ELO_SCALE = 400, ELO_DIVISOR = 200, GOALIE_WEIGHT = 0.35, P1_SHARE = 0.33;
+
+  const awayGoalie = _goaliesData.find(g => g['Team Abbr']===awayAbbr && g['Goalie Name']===awayGoalieName);
+  const homeGoalie = _goaliesData.find(g => g['Team Abbr']===homeAbbr && g['Goalie Name']===homeGoalieName);
+  const awayGoalieDelta = awayGoalie ? goalieEloDelta(Number(awayGoalie['SV%'])) : 0;
+  const homeGoalieDelta = homeGoalie ? goalieEloDelta(Number(homeGoalie['SV%'])) : 0;
+
+  const awayEff = Number(awayR.Elo) + awayGoalieDelta * GOALIE_WEIGHT;
+  const homeEff = Number(homeR.Elo) + HOME_ICE_ADV + homeGoalieDelta * GOALIE_WEIGHT;
+
+  const diff = homeEff - awayEff;
+  const homeWinProb = winProbClient(diff, ELO_SCALE);
+  const awayWinProb = 1 - homeWinProb;
+
+  const LEAGUE_AVG_TOTAL = 6.0;
+  const goalDiff = diff / ELO_DIVISOR;
+  const projHome = (LEAGUE_AVG_TOTAL/2) + (goalDiff/2);
+  const projAway = (LEAGUE_AVG_TOTAL/2) - (goalDiff/2);
+  const total = projHome + projAway;
+  const puckLine = -goalDiff;
+
+  const p1Total = total * P1_SHARE;
+  const p1Home = projHome * P1_SHARE;
+  const p1Away = projAway * P1_SHARE;
+  const p1HomeWinProb = 0.5 + (homeWinProb - 0.5) * 0.6;
+
+  const conf = (wp) => wp >= 0.62 || wp <= 0.38 ? 'Strong' : (wp >= 0.53 || wp <= 0.47 ? 'Moderate' : 'Toss-up');
+
+  resultEl.innerHTML = `
+    <div class="game-card" style="margin-top:4px;">
+      <div class="matchup-row">
+        <div class="matchup-team"><span class="team-abbr">${awayAbbr}</span><span class="team-meta">Elo ${Number(awayR.Elo).toFixed(0)}${awayGoalie ? ' · 🥅 '+awayGoalie['Goalie Name'] : ''}</span></div>
+        <span class="win-pct ${homeWinProb>=0.5?'':'favored'}">${(awayWinProb*100).toFixed(0)}%</span>
+      </div>
+      <div class="vs-divider">@</div>
+      <div class="matchup-row">
+        <div class="matchup-team"><span class="team-abbr">${homeAbbr}</span><span class="team-meta">Elo ${Number(homeR.Elo).toFixed(0)}${homeGoalie ? ' · 🥅 '+homeGoalie['Goalie Name'] : ''}</span></div>
+        <span class="win-pct ${homeWinProb>=0.5?'favored':''}">${(homeWinProb*100).toFixed(0)}%</span>
+      </div>
+      <div class="pred-strip">
+        <div class="pred-box"><div class="label">Proj Score</div><div class="value">${projAway.toFixed(1)}–${projHome.toFixed(1)}</div></div>
+        <div class="pred-box"><div class="label">Total (O/U)</div><div class="value">${total.toFixed(1)}</div></div>
+        <div class="pred-box"><div class="label">Puck Line</div><div class="value">${homeAbbr} ${puckLine>0?'+':''}${puckLine.toFixed(1)}</div></div>
+      </div>
+      <span class="conf-badge ${confClass(conf(homeWinProb))}">${conf(homeWinProb)} pick</span>
+      <div class="p1-panel open" style="margin-top:14px;">
+        <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">1st Period</div>
+        <div class="pred-strip">
+          <div class="pred-box"><div class="label">1P Score</div><div class="value">${p1Away.toFixed(1)}–${p1Home.toFixed(1)}</div></div>
+          <div class="pred-box"><div class="label">1P Total</div><div class="value">${p1Total.toFixed(1)}</div></div>
+          <div class="pred-box"><div class="label">1P Win%</div><div class="value" style="font-size:12px;">${homeAbbr} ${(p1HomeWinProb*100).toFixed(0)}%</div></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+loadAll();
+</script>
+</body>
+</html>
