@@ -144,6 +144,15 @@
   }
   .team-meta{font-size:11px; color:var(--text-faint);}
   .team-goalie{font-size:11px; color:var(--text-dim); font-style:italic;}
+  .team-goalie .g-stats{font-style:normal; color:var(--text-faint); font-family:var(--font-mono); font-size:10px;}
+  .g-src{
+    display:inline-block; font-style:normal; font-family:var(--font-mono); font-size:9px;
+    padding:1px 5px; margin-left:4px; border-radius:6px; border:1px solid var(--border);
+    color:var(--text-faint); vertical-align:middle;
+  }
+  .g-src.confirmed{color:#34d399; border-color:rgba(52,211,153,.45);}
+  .g-src.projected{color:var(--gold); border-color:rgba(251,191,36,.4);}
+  .g-src.manual{color:#60a5fa; border-color:rgba(96,165,250,.45);}
   .win-pct{
     font-family:var(--font-mono); font-weight:600; font-size:15px;
     min-width:52px; text-align:right;
@@ -444,6 +453,44 @@ function confClass(conf){
   return 'conf-tossup';
 }
 
+/* Tip Time arrives as "7:00 PM" text. Hide anything else (e.g. a 1899-... spreadsheet zero-date). */
+function fmtTip(v){
+  const s = String(v || '').trim();
+  return /^\d{1,2}:\d{2}\s?[AP]M$/i.test(s) ? s + ' ET' : '';
+}
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+/* Record line: season record, then the split that matters for this game in parentheses.
+   Away team shows its AWAY record, home team shows its HOME record (W-L; the split's L includes OT losses). */
+function recordLine(r, side){
+  const overall = `${r.W ?? ''}-${r.L ?? ''}${r.OTL ? '-'+r.OTL : ''}`;
+  const split = side === 'away'
+    ? `${r['Away W'] ?? 0}-${r['Away L'] ?? 0}`
+    : `${r['Home W'] ?? 0}-${r['Home L'] ?? 0}`;
+  return `${overall} (${split}) · Elo ${r.Elo ?? '—'}`;
+}
+
+/* Goalie name + stats from the Goalies tab (SV%, GAA, record) + where the pick came from */
+function goalieLine(teamAbbr, name, source){
+  if (!name) return '';
+  const g = _goaliesData.find(x => x['Team Abbr'] === teamAbbr && String(x['Goalie Name']).toLowerCase() === String(name).toLowerCase());
+  const bits = [];
+  if (g){
+    const sv = Number(g['SV%']);
+    if (sv) bits.push(sv.toFixed(3).replace(/^0/, '') + ' SV%');
+    const gaa = Number(g['GAA']);
+    if (gaa) bits.push(gaa.toFixed(2) + ' GAA');
+    if (g['Record (W-L-OT)']) bits.push(g['Record (W-L-OT)']);
+  }
+  const stats = bits.length ? ` <span class="g-stats">${esc(bits.join(' · '))}</span>` : '';
+  const cls = String(source || '').toLowerCase().replace(/[^a-z]/g, '');
+  const badge = source ? `<span class="g-src ${cls === 'confirmed' ? 'confirmed' : cls === 'projected' ? 'projected' : cls === 'manual' ? 'manual' : ''}">${esc(source)}</span>` : '';
+  return `<div class="team-goalie">🥅 ${esc(name)}${stats}${badge}</div>`;
+}
+
 function renderGameCard(g){
   const away = g['Away Team'], home = g['Home Team'];
   const awayR = _rankingMap[away] || {}, homeR = _rankingMap[home] || {};
@@ -458,15 +505,15 @@ function renderGameCard(g){
   return `
   <div class="game-card">
     <div class="game-time">
-      <span>${g['Tip Time'] || ''}</span>
+      <span>${fmtTip(g['Tip Time'])}</span>
       <span class="game-conf">${awayR.Conf ? (awayR.Conf.slice(0,4).toUpperCase()) : ''}</span>
     </div>
     <div class="matchup-row">
       <div class="matchup-team">
         <span class="team-abbr">${away}</span>
         <div>
-          <div class="team-meta">${awayR.W ?? ''}-${awayR.L ?? ''}${awayR.OTL ? '-'+awayR.OTL : ''} · Elo ${awayR.Elo ?? '—'}</div>
-          ${g['Away Goalie'] ? `<div class="team-goalie">🥅 ${g['Away Goalie']}</div>` : ''}
+          <div class="team-meta">${recordLine(awayR, 'away')}</div>
+          ${goalieLine(away, g['Away Goalie'], g['Away Goalie Source'])}
         </div>
       </div>
       <span class="win-pct ${!homeFav ? 'favored' : ''}">${(awayWinPct*100).toFixed(0)}%</span>
@@ -476,8 +523,8 @@ function renderGameCard(g){
       <div class="matchup-team">
         <span class="team-abbr">${home}</span>
         <div>
-          <div class="team-meta">${homeR.W ?? ''}-${homeR.L ?? ''}${homeR.OTL ? '-'+homeR.OTL : ''} · Elo ${homeR.Elo ?? '—'}</div>
-          ${g['Home Goalie'] ? `<div class="team-goalie">🥅 ${g['Home Goalie']}</div>` : ''}
+          <div class="team-meta">${recordLine(homeR, 'home')}</div>
+          ${goalieLine(home, g['Home Goalie'], g['Home Goalie Source'])}
         </div>
       </div>
       <span class="win-pct ${homeFav ? 'favored' : ''}">${(homeWinPct*100).toFixed(0)}%</span>
