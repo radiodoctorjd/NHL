@@ -144,7 +144,7 @@
   }
   .team-meta{font-size:11px; color:var(--text-faint);}
   .team-goalie{font-size:11px; color:var(--text-dim); font-style:italic;}
-  .team-goalie .g-stats{font-style:normal; color:var(--text-faint); font-family:var(--font-mono); font-size:10px;}
+  .team-goalie .g-stats{display:block; margin-top:1px; font-style:normal; color:var(--text-faint); font-family:var(--font-mono); font-size:10px;}
   .g-src{
     display:inline-block; font-style:normal; font-family:var(--font-mono); font-size:9px;
     padding:1px 5px; margin-left:4px; border-radius:6px; border:1px solid var(--border);
@@ -485,10 +485,10 @@ function goalieLine(teamAbbr, name, source){
     if (gaa) bits.push(gaa.toFixed(2) + ' GAA');
     if (g['Record (W-L-OT)']) bits.push(g['Record (W-L-OT)']);
   }
-  const stats = bits.length ? ` <span class="g-stats">${esc(bits.join(' · '))}</span>` : '';
+  const stats = bits.length ? `<span class="g-stats">${esc(bits.join(' · '))}</span>` : '';
   const cls = String(source || '').toLowerCase().replace(/[^a-z]/g, '');
   const badge = source ? `<span class="g-src ${cls === 'confirmed' ? 'confirmed' : cls === 'projected' ? 'projected' : cls === 'manual' ? 'manual' : ''}">${esc(source)}</span>` : '';
-  return `<div class="team-goalie">🥅 ${esc(name)}${stats}${badge}</div>`;
+  return `<div class="team-goalie">🥅 ${esc(name)}${badge}${stats}</div>`;
 }
 
 function renderGameCard(g){
