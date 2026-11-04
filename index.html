@@ -251,6 +251,9 @@
     #last-updated{text-align:left;}
     .predictor-row{grid-template-columns:1fr;}
   }
+  .b2b-slot{display:inline-flex; margin-left:-4px;}
+  .b2b-slot:empty{display:none;}
+  .b2b-badge{font-family:'Oswald',sans-serif; font-size:10px; font-weight:700; letter-spacing:.06em; line-height:1; padding:3px 6px; border-radius:4px; background:rgba(255,107,53,.16); color:#ff8a5c; border:1px solid rgba(255,107,53,.35); white-space:nowrap; cursor:help;}
 </style>
 </head>
 <body>
@@ -390,6 +393,65 @@ function jsonpFetch(url){
 }
 
 /* ── Boot ─────────────────────────────────────────────────────────── */
+/* ── Back-to-back badges ─────────────────────────────────────────────
+   A team is on a back-to-back when it also played the calendar day
+   before this game. Game days come from the sheet's own schedule plus
+   ESPN's public scoreboard for yesterday and today (fetched straight
+   from the browser), so today's games can see last night's results.
+   Cards render an empty .b2b-slot next to each team; applyB2BBadges()
+   fills them whenever either data source arrives. */
+const B2B_ESPN_PATH = 'hockey/nhl';
+// ESPN abbreviation -> abbreviation used by the sheet
+const B2B_ALIASES = { TB:'TBL', NJ:'NJD', LA:'LAK', SJ:'SJS', UTAH:'UTA', WAS:'WSH' };
+const _b2bPlayed = {};   // team abbr -> Set of 'YYYY-MM-DD' (local)
+
+function b2bKey(abbr){
+  const a = String(abbr || '').trim().toUpperCase();
+  return B2B_ALIASES[a] || a;
+}
+function b2bDay(offset){
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function b2bAddGame(abbr, day){
+  const k = b2bKey(abbr);
+  if (!k || !day) return;
+  (_b2bPlayed[k] = _b2bPlayed[k] || new Set()).add(day);
+}
+// offset: 0 = game is today, 1 = game is tomorrow
+function b2bSlot(abbr, offset, forced){
+  return `<span class="b2b-slot" data-team="${b2bKey(abbr)}" data-offset="${offset}"${forced ? ' data-forced="1"' : ''}></span>`;
+}
+function applyB2BBadges(){
+  document.querySelectorAll('.b2b-slot').forEach(slot => {
+    const team = slot.dataset.team;
+    const prevDay = b2bDay(Number(slot.dataset.offset || 0) - 1);
+    const onB2B = slot.dataset.forced === '1' || !!(_b2bPlayed[team] && _b2bPlayed[team].has(prevDay));
+    slot.innerHTML = onB2B
+      ? `<span class="b2b-badge" title="${team} is on a back-to-back (also played the previous day)">B2B</span>`
+      : '';
+  });
+}
+async function loadB2BFromESPN(){
+  await Promise.all([-1, 0].map(async offset => {
+    const day = b2bDay(offset);
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${B2B_ESPN_PATH}/scoreboard?dates=${day.replace(/-/g,'')}`, { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(t);
+      if (!res.ok) return;
+      const data = await res.json();
+      (data.events || []).forEach(ev =>
+        ((ev.competitions && ev.competitions[0] && ev.competitions[0].competitors) || [])
+          .forEach(c => b2bAddGame(c.team && c.team.abbreviation, day)));
+    } catch (e) { /* offline / blocked: fall back to sheet data only */ }
+  }));
+  applyB2BBadges();
+}
+const _b2bReady = loadB2BFromESPN();
+
 async function loadAll(){
   if (!WEBAPP_URL || WEBAPP_URL.indexOf('PASTE_YOUR') === 0){
     ['today-games','tomorrow-games'].forEach(id => showError(id, 'Set WEBAPP_URL at the top of the script to your deployed Apps Script Web App URL.'));
@@ -413,8 +475,20 @@ async function loadAll(){
     const todayGames = schedule.filter(g => g.Date && new Date(g.Date).toDateString() === todayStr);
     const tomorrowGames = schedule.filter(g => g.Date && new Date(g.Date).toDateString() === tomorrowStr);
 
+    // Back-to-back: record every scheduled game day from the sheet
+    schedule.forEach(g => {
+      const d = g.Date ? new Date(g.Date) : null;
+      if (!d || isNaN(d)) return;
+      const day = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      b2bAddGame(g['Away Team'], day);
+      b2bAddGame(g['Home Team'], day);
+    });
+    todayGames.forEach(g => { g._b2bOffset = 0; });
+    tomorrowGames.forEach(g => { g._b2bOffset = 1; });
+
     renderDayGames(todayGames, 'today-games', 'today-subtitle', 'Today · ' + new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
     renderDayGames(tomorrowGames, 'tomorrow-games', 'tomorrow-subtitle', 'Tomorrow · ' + new Date(Date.now()+86400000).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}));
+    applyB2BBadges();
 
     document.getElementById('standings-subtitle').textContent =
       'Updated through ' + ts.toLocaleDateString('en-US',{month:'long',day:'numeric'}) + ' results';
@@ -511,6 +585,7 @@ function renderGameCard(g){
     <div class="matchup-row">
       <div class="matchup-team">
         <span class="team-abbr">${away}</span>
+        ${b2bSlot(away, g._b2bOffset || 0)}
         <div>
           <div class="team-meta">${recordLine(awayR, 'away')}</div>
           ${goalieLine(away, g['Away Goalie'], g['Away Goalie Source'])}
@@ -522,6 +597,7 @@ function renderGameCard(g){
     <div class="matchup-row">
       <div class="matchup-team">
         <span class="team-abbr">${home}</span>
+        ${b2bSlot(home, g._b2bOffset || 0)}
         <div>
           <div class="team-meta">${recordLine(homeR, 'home')}</div>
           ${goalieLine(home, g['Home Goalie'], g['Home Goalie Source'])}
