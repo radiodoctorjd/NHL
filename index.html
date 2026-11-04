@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
-<title>NHL Elo Predictions</title>
+<title>NHL Predictions</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   /* Light theme by default; the original dark theme when the device is set to dark mode. */
@@ -187,6 +187,9 @@
   .game-conf{color:var(--gold);}
   .matchup-row{display:flex; align-items:center; justify-content:space-between; padding:6px 0;}
   .matchup-team{display:flex; align-items:center; gap:10px; flex:1;}
+  .team-id{display:flex; flex-direction:column; align-items:center; gap:3px; width:48px; flex-shrink:0;}
+  .team-id .team-abbr{width:auto;}
+  .team-logo{display:block; width:30px; height:30px; object-fit:contain;}
   .team-abbr{
     font-family:'Oswald',sans-serif; font-weight:700; font-size:16px;
     width:48px; text-align:center;
@@ -312,7 +315,7 @@
     <div class="brand">
       <div class="brand-mark"><span>NHL</span></div>
       <div>
-        <h1>NHL <em>ELO</em> Predictions</h1>
+        <h1>NHL Predictions</h1>
         <div class="tag">Winner · Total Goals · 1st Period · Puck Line</div>
       </div>
     </div>
@@ -394,7 +397,7 @@
 </main>
 
 <footer>
-  NHL Elo Prediction Model · Data refreshes from the linked Google Sheet · Not affiliated with the NHL
+  NHL Prediction Model · Not affiliated with the NHL
 </footer>
 
 <script>
@@ -582,6 +585,19 @@ function fmtTip(v){
   return /^\d{1,2}:\d{2}\s?[AP]M$/i.test(s) ? s + ' ET' : '';
 }
 
+/* Team logo from ESPN, shown under the abbreviation. ESPN's codes differ from
+   the sheet's for a few teams. In dark mode ESPN's dark-background version is
+   used; if that one is missing, fall back to the regular logo, and if the logo
+   can't load at all, hide it. */
+const LOGO_CODE = { TBL:'tb', NJD:'nj', LAK:'la', SJS:'sj', UTA:'utah', WAS:'wsh' };
+function teamLogo(abbr){
+  if (!abbr) return '';
+  const code = LOGO_CODE[String(abbr).toUpperCase()] || String(abbr).toLowerCase();
+  const base = 'https://a.espncdn.com/i/teamlogos/nhl/';
+  return `<picture><source srcset="${base}500-dark/${code}.png" media="(prefers-color-scheme: dark)"><img class="team-logo" src="${base}500/${code}.png" alt="" loading="lazy" onerror="var s=this.previousElementSibling;if(s){s.remove();}else{this.style.display='none';}"></picture>`;
+}
+function teamId(abbr){ return `<div class="team-id"><span class="team-abbr">${esc(abbr)}</span>${teamLogo(abbr)}</div>`; }
+
 function esc(s){
   return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
@@ -633,7 +649,7 @@ function renderGameCard(g){
     </div>
     <div class="matchup-row">
       <div class="matchup-team">
-        <span class="team-abbr">${away}</span>
+        ${teamId(away)}
         ${b2bSlot(away, g._b2bOffset || 0)}
         <div>
           <div class="team-meta">${recordLine(awayR, 'away')}</div>
@@ -645,7 +661,7 @@ function renderGameCard(g){
     <div class="vs-divider">@</div>
     <div class="matchup-row">
       <div class="matchup-team">
-        <span class="team-abbr">${home}</span>
+        ${teamId(home)}
         ${b2bSlot(home, g._b2bOffset || 0)}
         <div>
           <div class="team-meta">${recordLine(homeR, 'home')}</div>
@@ -888,12 +904,12 @@ function runPredictor(){
   resultEl.innerHTML = `
     <div class="game-card" style="margin-top:4px;">
       <div class="matchup-row">
-        <div class="matchup-team"><span class="team-abbr">${awayAbbr}</span><span class="team-meta">Elo ${Number(awayR.Elo).toFixed(0)}${awayGoalie ? ' · 🥅 '+awayGoalie['Goalie Name'] : ''}</span></div>
+        <div class="matchup-team">${teamId(awayAbbr)}<span class="team-meta">Elo ${Number(awayR.Elo).toFixed(0)}${awayGoalie ? ' · 🥅 '+awayGoalie['Goalie Name'] : ''}</span></div>
         <span class="win-pct ${homeWinProb>=0.5?'':'favored'}">${(awayWinProb*100).toFixed(0)}%</span>
       </div>
       <div class="vs-divider">@</div>
       <div class="matchup-row">
-        <div class="matchup-team"><span class="team-abbr">${homeAbbr}</span><span class="team-meta">Elo ${Number(homeR.Elo).toFixed(0)}${homeGoalie ? ' · 🥅 '+homeGoalie['Goalie Name'] : ''}</span></div>
+        <div class="matchup-team">${teamId(homeAbbr)}<span class="team-meta">Elo ${Number(homeR.Elo).toFixed(0)}${homeGoalie ? ' · 🥅 '+homeGoalie['Goalie Name'] : ''}</span></div>
         <span class="win-pct ${homeWinProb>=0.5?'favored':''}">${(homeWinProb*100).toFixed(0)}%</span>
       </div>
       <div class="pred-strip">
