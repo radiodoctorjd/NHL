@@ -3,25 +3,74 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
 <title>NHL Elo Predictions</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+  /* Light theme by default; the original dark theme when the device is set to dark mode. */
   :root{
+    color-scheme:light;
     --ice:#eef4fa;
     --rink-blue:#0b3d91;
     --rink-blue-dark:#082a66;
-    --steel:#1c2530;
-    --steel-2:#242f3d;
-    --panel:#15202b;
-    --panel-2:#1b2836;
-    --border:#2c3b4d;
-    --puck:#0a0e14;
+    --steel:#ffffff;
+    --steel-2:#f3f6fa;
+    --panel:#f7f9fc;
+    --panel-2:#ffffff;
+    --border:#d3dce7;
+    --puck:#eaf0f6;
+    --page-glow:#f8fbfe;
+    --header-top:#ffffff;
+    --rink-line:rgba(11,61,145,0.035);
+    --rink-circle:rgba(11,61,145,0.08);
+    --row-line:#e3e9f0;
+    --row-hover:rgba(11,61,145,0.04);
     --red:#c8102e;
-    --gold:#ffb81c;
-    --text:#e9eef4;
-    --text-dim:#9db0c4;
-    --text-faint:#6b7d92;
-    --green:#2ecc71;
+    --gold:#a86a00;
+    --text:#132030;
+    --text-dim:#45586e;
+    --text-faint:#627489;
+    --green:#16884a;
+    --g-confirmed:#11805a;
+    --g-manual:#1d5fc4;
+    --east-bg:rgba(200,16,46,0.10); --east-fg:#b00d28;
+    --west-bg:rgba(11,61,145,0.10); --west-fg:#0b3d91;
+    --link:#0b3d91;
+    --error:#b00d28;
+    --b2b-fg:#c2410c;
+    --chart-grid:rgba(11,61,145,0.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      color-scheme:dark;
+      --steel:#1c2530;
+      --steel-2:#242f3d;
+      --panel:#15202b;
+      --panel-2:#1b2836;
+      --border:#2c3b4d;
+      --puck:#0a0e14;
+      --page-glow:#0f1922;
+      --header-top:#0d1b2e;
+      --rink-line:rgba(255,255,255,0.012);
+      --rink-circle:rgba(255,255,255,0.05);
+      --row-line:rgba(44,59,77,0.5);
+      --row-hover:rgba(255,255,255,0.02);
+      --gold:#ffb81c;
+      --text:#e9eef4;
+      --text-dim:#9db0c4;
+      --text-faint:#6b7d92;
+      --green:#2ecc71;
+      --g-confirmed:#34d399;
+      --g-manual:#60a5fa;
+      --east-bg:rgba(200,16,46,0.18); --east-fg:#ff6b7f;
+      --west-bg:rgba(11,61,145,0.25); --west-fg:#6fa8ff;
+      --link:#0b3d91;
+      --error:#ff6b7f;
+      --b2b-fg:#ff8a5c;
+      --chart-grid:rgba(255,255,255,0.05);
+    }
+  }
+  :root{
     --font-display: 'Bebas Neue', 'Oswald', 'Arial Narrow', sans-serif;
     --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-mono: 'SF Mono', 'Roboto Mono', ui-monospace, monospace;
@@ -30,7 +79,7 @@
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
     background:
-      radial-gradient(ellipse at top, #0f1922 0%, var(--puck) 55%),
+      radial-gradient(ellipse at top, var(--page-glow) 0%, var(--puck) 55%),
       var(--puck);
     color:var(--text);
     font-family:'Inter', var(--font-body);
@@ -42,7 +91,7 @@
     content:'';
     position:fixed; inset:0;
     background-image:
-      repeating-linear-gradient(0deg, transparent 0 39px, rgba(255,255,255,0.012) 39px 40px);
+      repeating-linear-gradient(0deg, transparent 0 39px, var(--rink-line) 39px 40px);
     pointer-events:none;
     z-index:0;
   }
@@ -51,14 +100,14 @@
     position:relative;
     padding:28px 24px 22px;
     border-bottom:3px solid var(--rink-blue);
-    background:linear-gradient(180deg, #0d1b2e 0%, var(--puck) 100%);
+    background:linear-gradient(180deg, var(--header-top) 0%, var(--puck) 100%);
     overflow:hidden;
   }
   header::after{
     content:'';
     position:absolute; left:50%; top:-40px;
     width:340px; height:340px;
-    border:2px solid rgba(255,255,255,0.05);
+    border:2px solid var(--rink-circle);
     border-radius:50%;
     transform:translateX(-50%);
   }
@@ -150,9 +199,9 @@
     padding:1px 5px; margin-left:4px; border-radius:6px; border:1px solid var(--border);
     color:var(--text-faint); vertical-align:middle;
   }
-  .g-src.confirmed{color:#34d399; border-color:rgba(52,211,153,.45);}
-  .g-src.projected{color:var(--gold); border-color:rgba(251,191,36,.4);}
-  .g-src.manual{color:#60a5fa; border-color:rgba(96,165,250,.45);}
+  .g-src.confirmed{color:var(--g-confirmed); border-color:color-mix(in srgb, var(--g-confirmed) 45%, transparent);}
+  .g-src.projected{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 40%, transparent);}
+  .g-src.manual{color:var(--g-manual); border-color:color-mix(in srgb, var(--g-manual) 45%, transparent);}
   .win-pct{
     font-family:var(--font-mono); font-weight:600; font-size:15px;
     min-width:52px; text-align:right;
@@ -177,7 +226,7 @@
   .conf-moderate{background:rgba(255,184,28,0.15); color:var(--gold);}
   .conf-tossup{background:rgba(155,166,179,0.15); color:var(--text-dim);}
   .p1-toggle{
-    margin-top:10px; font-size:11px; color:var(--rink-blue); cursor:pointer;
+    margin-top:10px; font-size:11px; color:var(--link); cursor:pointer;
     text-decoration:underline; text-underline-offset:2px; user-select:none;
   }
   .p1-panel{
@@ -197,16 +246,16 @@
     position:sticky; top:0;
   }
   table.rank-table th:first-child, table.rank-table th:nth-child(2){text-align:left;}
-  table.rank-table td{padding:9px 8px; text-align:right; border-bottom:1px solid rgba(44,59,77,0.5); font-family:var(--font-mono);}
+  table.rank-table td{padding:9px 8px; text-align:right; border-bottom:1px solid var(--row-line); font-family:var(--font-mono);}
   table.rank-table td:first-child{font-family:'Oswald',sans-serif; color:var(--text-faint); text-align:left;}
   table.rank-table td:nth-child(2){text-align:left; font-family:'Inter',sans-serif; font-weight:600;}
-  table.rank-table tr:hover td{background:rgba(255,255,255,0.02);}
+  table.rank-table tr:hover td{background:var(--row-hover);}
   .conf-tag{
     display:inline-block; padding:1px 7px; border-radius:4px; font-size:10px; font-weight:700;
     margin-left:6px; letter-spacing:0.3px;
   }
-  .conf-east{background:rgba(200,16,46,0.18); color:#ff6b7f;}
-  .conf-west{background:rgba(11,61,145,0.25); color:#6fa8ff;}
+  .conf-east{background:var(--east-bg); color:var(--east-fg);}
+  .conf-west{background:var(--west-bg); color:var(--west-fg);}
 
   /* ── Team stats grid ────────────────────────────────────── */
   .teamstats-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:12px;}
@@ -244,7 +293,7 @@
 
   footer{max-width:1180px; margin:40px auto 0; padding:20px 24px; color:var(--text-faint); font-size:11.5px; text-align:center;}
 
-  .error-msg{color:#ff6b7f; font-size:13px; padding:14px; background:rgba(200,16,46,0.08); border-radius:8px;}
+  .error-msg{color:var(--error); font-size:13px; padding:14px; background:rgba(200,16,46,0.08); border-radius:8px;}
 
   @media (max-width:600px){
     .header-inner{flex-direction:column; align-items:flex-start;}
@@ -253,7 +302,7 @@
   }
   .b2b-slot{display:inline-flex; margin-left:-4px;}
   .b2b-slot:empty{display:none;}
-  .b2b-badge{font-family:'Oswald',sans-serif; font-size:10px; font-weight:700; letter-spacing:.06em; line-height:1; padding:3px 6px; border-radius:4px; background:rgba(255,107,53,.16); color:#ff8a5c; border:1px solid rgba(255,107,53,.35); white-space:nowrap; cursor:help;}
+  .b2b-badge{font-family:'Oswald',sans-serif; font-size:10px; font-weight:700; letter-spacing:.06em; line-height:1; padding:3px 6px; border-radius:4px; background:rgba(255,107,53,.16); color:var(--b2b-fg); border:1px solid rgba(255,107,53,.35); white-space:nowrap; cursor:help;}
 </style>
 </head>
 <body>
@@ -699,6 +748,13 @@ function renderRankings(ratings){
 }
 
 let _eloChartInstance = null;
+function themeVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+// Redraw the Elo chart with the new colors if the device switches light/dark
+if (window.matchMedia) {
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const redraw = () => { if (_ratingsData && _ratingsData.length) renderEloChart(_ratingsData); };
+  if (mq.addEventListener) mq.addEventListener('change', redraw); else if (mq.addListener) mq.addListener(redraw);
+}
 function renderEloChart(ratings){
   const sorted = [...ratings].sort((a,b) => b.Elo - a.Elo);
   const ctx = document.getElementById('elo-chart');
@@ -718,8 +774,8 @@ function renderEloChart(ratings){
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color:'#9db0c4', font:{size:10} }, grid:{ display:false } },
-        y: { beginAtZero:false, ticks:{ color:'#9db0c4' }, grid:{ color:'rgba(255,255,255,0.05)' } }
+        x: { ticks: { color:themeVar('--text-dim'), font:{size:10} }, grid:{ display:false } },
+        y: { beginAtZero:false, ticks:{ color:themeVar('--text-dim') }, grid:{ color:themeVar('--chart-grid') } }
       }
     }
   });
