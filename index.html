@@ -64,7 +64,7 @@
       --g-manual:#60a5fa;
       --east-bg:rgba(200,16,46,0.18); --east-fg:#ff6b7f;
       --west-bg:rgba(11,61,145,0.25); --west-fg:#6fa8ff;
-      --link:#0b3d91;
+      --link:#6fa8ff;
       --error:#ff6b7f;
       --b2b-fg:#ff8a5c;
       --chart-grid:rgba(255,255,255,0.05);
@@ -693,7 +693,7 @@ function renderDayGames(games, containerId, subtitleId, label){
 
 /* ── Standings ────────────────────────────────────────────────────────── */
 function renderStandings(ratings){
-  const sorted = [...ratings].sort((a,b) => (b.W - b.L*0) - 0 || (winPct(b) - winPct(a)));
+  const sorted = [...ratings].sort((a,b) => standingsPts(b) - standingsPts(a) || winPct(b) - winPct(a) || (Number(a.GP)||0) - (Number(b.GP)||0));
   const rows = sorted.map((t,i) => `
     <tr>
       <td>${i+1}</td>
@@ -703,6 +703,7 @@ function renderStandings(ratings){
       <td>${t.W}</td>
       <td>${t.L}</td>
       <td>${t.OTL}</td>
+      <td><b>${standingsPts(t)}</b></td>
       <td>${winPct(t).toFixed(3)}</td>
       <td>${t['Home W']}-${t['Home L']}</td>
       <td>${t['Away W']}-${t['Away L']}</td>
@@ -711,11 +712,14 @@ function renderStandings(ratings){
     </tr>`).join('');
   document.getElementById('standings-table').innerHTML = `
     <thead><tr>
-      <th>#</th><th>Team</th><th>Div</th><th>GP</th><th>W</th><th>L</th><th>OTL</th>
+      <th>#</th><th>Team</th><th>Div</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th>
       <th>Pt%</th><th>Home</th><th>Away</th><th>L10</th><th>Streak</th>
     </tr></thead>
     <tbody>${rows}</tbody>`;
 }
+
+// NHL standings points: 2 per win, 1 per overtime/shootout loss
+function standingsPts(t){ return 2*(Number(t.W)||0) + (Number(t.OTL)||0); }
 
 function winPct(t){
   const gp = Number(t.GP) || 0;
